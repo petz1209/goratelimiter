@@ -3,8 +3,8 @@ package client
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
+	"strings"
 )
 
 const (
@@ -17,13 +17,9 @@ const (
 
 func NewRateLimitClient(addr string) *RateLimitClient {
 
-	conn, err := net.Dial("tcp", addr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return &RateLimitClient{
-		conn: conn,
-	}
+	cl := &RateLimitClient{Addr: addr, MaxReconnectAttempts: 3}
+	cl.Connect()
+	return cl
 
 }
 
@@ -35,11 +31,35 @@ type RateState struct {
 }
 
 type RateLimitClient struct {
-	conn net.Conn
+	ReconnectAttempts    int
+	MaxReconnectAttempts int
+	Addr                 string
+	conn                 net.Conn
+}
+
+func (c *RateLimitClient) SetMaxReconnectAttemps(v int) *RateLimitClient {
+	c.MaxReconnectAttempts = v
+	return c
+
 }
 
 func (c *RateLimitClient) Close() {
 	c.conn.Close()
+}
+
+func (c *RateLimitClient) Connect() error {
+	conn, err := net.Dial("tcp", c.Addr)
+	if err != nil {
+		c.ReconnectAttempts++
+		return err
+	}
+	c.ReconnectAttempts = 0
+	c.conn = conn
+	return nil
+
+}
+func (c *RateLimitClient) Reconnect() error {
+	return c.Connect()
 }
 
 func (c *RateLimitClient) Aquire(key string, maxConcurrency, maxVolume int) (int, error) {
@@ -49,6 +69,14 @@ func (c *RateLimitClient) Aquire(key string, maxConcurrency, maxVolume int) (int
 	buff := make([]byte, 1024)
 	_, err := c.conn.Write([]byte(fmt.Sprintf("AQUIRE %s %d %d", key, maxConcurrency, maxVolume)))
 	if err != nil {
+		if strings.HasSuffix(err.Error(), "broken pipe") {
+			if c.ReconnectAttempts < c.MaxReconnectAttempts {
+				c.Reconnect()
+				return c.Aquire(key, maxConcurrency, maxVolume)
+			}
+
+		}
+
 		return UNKNOWN_STATE, err
 	}
 	n, err := c.conn.Read(buff)
@@ -69,6 +97,13 @@ func (c *RateLimitClient) Return(key string, volume int) (int, error) {
 	msg := fmt.Sprintf("RETURN %s %d", key, volume)
 	_, err := c.conn.Write([]byte(msg))
 	if err != nil {
+		if strings.HasSuffix(err.Error(), "broken pipe") {
+			if c.ReconnectAttempts < c.MaxReconnectAttempts {
+				c.Reconnect()
+				return c.Return(key, volume)
+			}
+
+		}
 		return UNKNOWN_STATE, err
 	}
 

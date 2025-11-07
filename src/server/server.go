@@ -29,6 +29,11 @@ func NewDB(MaxConcurrency int) *IMDB {
 
 }
 
+type Overview struct {
+	Volume      int `json:"volume"`
+	Concurrency int `json:"concurrency"`
+}
+
 // IMB (In.Memory.Data.Base)
 type IMDB struct {
 	MaxConcurrency int
@@ -163,6 +168,30 @@ func (s *IMDB) AdjustMaxConcurrency(v int) (int, error) {
 
 }
 
+func (s *IMDB) Overview() map[string]Overview {
+
+	vdb := make(map[string]int)
+	concdb := make(map[string]int)
+	for k, v := range s.volumeDB {
+		vdb[k] = v
+	}
+	for k, v := range s.requestsDB {
+		concdb[k] = v
+	}
+
+	response := make(map[string]Overview)
+	total := Overview{}
+	for k, v := range vdb {
+		response[k] = Overview{Volume: v, Concurrency: concdb[k]}
+		total.Volume += v
+		total.Concurrency += concdb[k]
+	}
+	response["total"] = total
+
+	return response
+
+}
+
 type RateState struct {
 	GroupActive int  `json:"group_active"`
 	TotalActive int  `json:"total_active"`
@@ -174,7 +203,6 @@ type RateState struct {
 //
 //	handles interaction with a client connection
 func HandleClient(ctx context.Context, conn net.Conn, db *IMDB) error {
-
 	defer conn.Close()
 	// json.NewEncoder(conn).Encode(map[string]string{"msg": "connected"})
 	SERVER_DISCONNECT := map[string]string{"msg": "server disconnected"}

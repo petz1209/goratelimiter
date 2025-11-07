@@ -67,7 +67,7 @@ func (rt *RateLimitMw) middleware(next func(w http.ResponseWriter, r *http.Reque
 	TO_MANY_USER_REQUESTS := map[string]string{"message": "Currently your usergroup is running to many requests."}
 	MAX_VOLUME_REACHED_MSG := map[string]string{"message": "your daily data volume is exhausted for today."}
 	MAX_CONCURRENCY_BY_USER := 5
-	MAX_VOLUME := 100
+	MAX_VOLUME := 100000
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		user := r.PathValue("user")
@@ -129,6 +129,7 @@ func LogMiddleware(next func(w http.ResponseWriter, r *http.Request)) http.Handl
 		metrics.End = time.Now()
 		dur := time.Since(metrics.Start)
 		fmt.Printf("[%d] %s  start: %s  end: %s duration: %s volume: %d\n", metrics.StatusCode, r.URL, metrics.Start, metrics.End, dur, metrics.VolumeRows)
+
 	}
 
 }

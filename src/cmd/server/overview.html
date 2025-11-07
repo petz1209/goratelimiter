@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rate Limiter Overview</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        tr:hover {
+            background-color: #ddd;
+        }
+        .status {
+            font-weight: bold;
+            color: green;
+        }
+        .status.error {
+            color: red;
+        }
+        #last-updated {
+            font-size: 0.8em;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Rate Limiter Status</h1>
+    <p>refresh every 5 seconds. <span id="last-updated"></span></p>
+    
+    <p class="status" id="status-message">initiate table</p>
+
+    <table id="data-table">
+        <thead>
+            <tr>
+                <th onclick="sortTable(0)">Group</th>
+                <th onclick="sortTable(1)">Active Requests</th>
+                <th onclick="sortTable(2)">Data Volume (Rows)</th>
+            </tr>
+        </thead>
+        <tbody id="table-body">
+            <!-- Daten werden hier eingefügt -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+    const API_URL = '/overview';
+    const tableBody = document.getElementById('table-body');
+    const statusMessage = document.getElementById('status-message');
+    const lastUpdated = document.getElementById('last-updated');
+
+    // Funktion zum Abrufen der Daten von der API
+    async function fetchData() {
+        try {
+            const response = await fetch(API_URL);
+            if (!response.ok) {
+                throw new Error('Netzwerkantwort war nicht ok: ' + response.statusText);
+            }
+            const data = await response.json();
+            renderTable(data);
+            statusMessage.textContent = 'reresh successful.';
+            statusMessage.classList.remove('error');
+            statusMessage.classList.add('success');
+            lastUpdated.textContent = 'last refresh: ' + new Date().toLocaleTimeString();
+
+        } catch (error) {
+            console.error("Error loading Overview Data", error);
+            statusMessage.textContent = 'Error loading Overview Data: ' + error.message;
+            statusMessage.classList.remove('success');
+            statusMessage.classList.add('error');
+        }
+    }
+
+    // Funktion zum Rendern der Daten in der Tabelle
+    function renderTable(data) {
+        tableBody.innerHTML = ''; // Tabelle leeren
+
+        // Konvertiere das JSON-Objekt in ein Array für die einfache Sortierung und Iteration
+        const dataArray = Object.keys(data).map(key => ({
+            user: key,
+            ...data[key]
+        }));
+
+        dataArray.forEach(item => {
+            const row = document.createElement('tr');
+            
+            const userCell = document.createElement('td');
+            userCell.textContent = item.user;
+            row.appendChild(userCell);
+
+            const concCell = document.createElement('td');
+            concCell.textContent = item.concurrency;
+            row.appendChild(concCell);
+
+            const volCell = document.createElement('td');
+            volCell.textContent = item.volume;
+            row.appendChild(volCell);
+
+            tableBody.appendChild(row);
+        });
+    }
+
+    // Sortierfunktion (Grundlagen)
+    function sortTable(n) {
+        let table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
+        table = document.getElementById("data-table");
+        switching = true;
+        // Setze die Sortierrichtung auf aufsteigend
+        dir = "asc"; 
+        
+        while (switching) {
+            switching = false;
+            rows = table.rows;
+            for (i = 1; i < (rows.length - 1); i++) {
+                shouldSwitch = false;
+                x = rows[i].getElementsByTagName("TD")[n];
+                y = rows[i + 1].getElementsByTagName("TD")[n];
+                
+                // Werte vergleichen (für numerische Spalten als Zahl parsen)
+                let xContent = isNaN(x.innerHTML) ? x.innerHTML.toLowerCase() : parseInt(x.innerHTML);
+                let yContent = isNaN(y.innerHTML) ? y.innerHTML.toLowerCase() : parseInt(y.innerHTML);
+
+                if (dir == "asc") {
+                    if (xContent > yContent) {
+                        shouldSwitch= true;
+                        break;
+                    }
+                } else if (dir == "desc") {
+                    if (xContent < yContent) {
+                        shouldSwitch= true;
+                        break;
+                    }
+                }
+            }
+            if (shouldSwitch) {
+                rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+                switching = true;
+                switchcount ++;      
+            } else {
+                if (switchcount == 0 && dir == "asc") {
+                    dir = "desc";
+                    switching = true;
+                }
+            }
+        }
+    }
+
+
+    // Initialer Aufruf beim Laden der Seite
+    fetchData();
+
+    // Automatisches Aktualisieren alle 5000ms (5 Sekunden)
+    setInterval(fetchData, 5000);
+
+</script>
+
+</body>
+</html>
